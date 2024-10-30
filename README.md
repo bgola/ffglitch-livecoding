@@ -33,5 +33,4 @@ In another terminal you can run ffglitch with the scripts provided in the `scrip
 
 Now open `template.js`, edit and save it to start live coding.
 
-Many thanks to [Ramiro](https://github.com/ramiropolla/) for ffglitch! :)
-and to [S4NTP](https://s4ntp.org) for testing this concept with me! 
+Many thanks to [Ramiro](https://github.com/ramiropolla/) for ffglitch! And to [S4NTP](https://s4ntp.org) for testing this concept with me :-)
