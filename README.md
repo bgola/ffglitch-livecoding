@@ -3,7 +3,7 @@ ffglitch-livecoding
 
 This is some very hacky way to support changing the code dynamically while running [ffglitch](https://github.com/ramiropolla/ffglitch-core/).
 
-If you don't know what ffglitch is, check the [webpage](https://ffglitch.org/) and the WIP [collaborative tutorial](https://github.com/ramiropolla/ffglitch-scripts/tree/main/tutorial)
+If you don't know what ffglitch is, check the [webpage](https://ffglitch.org/) and the WIP [tutorial](https://github.com/ramiropolla/ffglitch-scripts/tree/main/tutorial)
 
 To run, first create a virtualenv and install the required libraries:
 
