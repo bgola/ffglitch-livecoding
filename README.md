@@ -12,7 +12,7 @@ git clone https://github.com/bgola/ffglitch-livecoding
 cd ffglitch-livecoding/
 python -m venv .env
 . .env/bin/activate
-pip install -e requirements.txt
+pip install -r requirements.txt
 ```
 
 If you use GNU/Linux you can also install `notify-send` from pip to have some nice visual feedback when you save the code:
