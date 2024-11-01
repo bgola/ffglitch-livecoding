@@ -8,7 +8,7 @@ setup_clean = () => {
 clean_live = () => {
     globals['frame'] += 1
     // cleans when saving the code
-    if (globals['frame'] < 3) { return 1 };
+    if (globals['frame'] < 3) { return 0 };
     return 0;
 }
 
@@ -21,13 +21,13 @@ setup_live = () => {
 // glitch_live is called every frame
 glitch_live = (frame) => {
     const fwd_mvs = frame.mv?.forward;
-    fwd_mvs.overflow = "truncate"
     if (!fwd_mvs) return;
+    fwd_mvs.overflow = "truncate"
 
     fwd_mvs.forEach((mv, row, col) => {
         if(!mv) { return };
-        mv[0] = 1000
-        mv[1] = 100
+        mv[0] += osc['valx']*(row*osc['valr'])
+        mv[1] += osc['valy']*(col*osc['valc'])
     })
     globals['frame_number'] += 1;
 }

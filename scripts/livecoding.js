@@ -1,13 +1,28 @@
-import * as zmq from "zmq";
+import * as zmq from "zmq"
 
-let zmqctx = new zmq.Context();
-let zmqsocket = zmqctx.socket(zmq.REQ);
+let zmqctx = new zmq.Context()
+let zmqoscsocket = zmqctx.socket(zmq.SUB)
+zmqoscsocket.setsockopt(zmq.SUBSCRIBE, "")
+zmqoscsocket.connect("tcp://localhost:5557")
+
+let zmqsocket = zmqctx.socket(zmq.REQ)
 zmqsocket.setsockopt(zmq.REQ_RELAXED, 1)
 zmqsocket.setsockopt(zmq.REQ_CORRELATE, 1)
-zmqsocket.connect("tcp://localhost:5555");
+zmqsocket.connect("tcp://localhost:5555")
 zmqsocket.send("PING")
 
+
 let globals = {};
+let osc = {};
+
+function handleOSC(message) {
+  let parts = message.split(",")
+  if (parts[0] == "/set") {
+    let varname = parts[1]
+    osc[varname] = parseFloat(parts[2])
+  }
+}
+
 
 export function setup(args) {
   args.features = ["mv"];
@@ -38,6 +53,14 @@ export function glitch_frame(frame) {
       zmqsocket.send(error.name + ": " + error.message)
     }
   } else {
-    glitch_live_working(frame)
+    let oscmessage = zmqoscsocket.recv_str(zmq.DONTWAIT)
+    if (oscmessage) {
+      handleOSC(oscmessage)
+    }
+    try {
+      glitch_live_working(frame)
+    } catch (error) {
+      console.log(error.name + ": " + error.message)
+    }
   }
 }
