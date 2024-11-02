@@ -44,8 +44,7 @@ def start_zmq_server(checker):
             last_code = open(file).read()
             send = True
 
-        #for socket in [cleansocket, livesocket]:
-        for socket in [livesocket]:
+        for socket in [cleansocket, livesocket]:
             try:
                 message = socket.recv_string(zmq.DONTWAIT)
             except:
