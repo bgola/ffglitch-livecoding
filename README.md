@@ -28,7 +28,7 @@ python zmqserver_livecoding_watchdog.py template.js
 In another terminal you can run ffglitch with the scripts provided in the `scripts/` folder (**check the paths for the ffglitch binaries**):
 
 ```bash
-./bin/ffgac -i somevideo_file.mp4 -vcodec mpeg4 -mpv_flags +nopimb+forcemv -qscale:v 1 -t 1050 -fcode 5 -g max -sc_threshold max -mb_type_script scripts/mb_type_func.js -f rawvideo pipe: | ./bin/fflive -i pipe: -s scripts/livecoding.js
+./bin/ffgac -i somevideo_file.mp4 -vcodec mpeg4 -mpv_flags +nopimb+forcemv -qscale:v 1 -t 1050 -fcode 5 -g max -sc_threshold max -mb_type_script scripts/mb_type_func_live.js -f rawvideo pipe: | ./bin/fflive -i pipe: -s scripts/livecoding.js
 ```
 
 Now open `template.js`, edit and save it to start live coding.
