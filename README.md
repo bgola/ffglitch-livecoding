@@ -28,7 +28,7 @@ Then run the watchdog script pointing it to the file you just copied:
 python zmqserver_livecoding_watchdog.py your-file.js
 ```
 
-I recommend to download the latest release of ffglitch from [ffglitch.org](https://ffglitch.org/), extracting the files in your ffglitch-livecoding copy and renaming the ffglitch folder to `bin/`.
+I recommend to download the latest release of ffglitch from [ffglitch.org](https://ffglitch.org/), extracting the files in your `ffglitch-livecoding` directory and renaming the ffglitch folder to `bin/`.
 
 In another terminal you can run ffglitch with the scripts provided in the `scripts/` folder (**check the paths for the ffglitch binaries**):
 
