@@ -53,7 +53,7 @@ There are two supported messages:
 
 A example in SuperCollider:
 
-```
+```supercollider
 n = NetAddr("127.0.0.1", 5558);
 
 n.sendMsg("/set", "someValue", 10.0.rand2);
