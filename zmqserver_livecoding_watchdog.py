@@ -88,7 +88,6 @@ async def osc_start_server():
     def set_var_handler(address, *args):
         varname = args[0]
         value = args[1]
-        print(f"/set,{varname},{value}")
         oscbridgesocket.send_string(f"/set,{varname},{value}")
 
     dispatcher = Dispatcher()
