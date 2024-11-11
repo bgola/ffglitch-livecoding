@@ -59,7 +59,11 @@ function handleOSC(message) {
 }
 
 export function mb_type_func(args) {
-  let msg = zmqsocket.recv_str(zmq.DONTWAIT);
+  let msg;
+  try {
+	  msg = zmqsocket.recv_str(zmq.DONTWAIT);
+  } catch {
+  };
   if (msg) {
     try {
       eval(msg)
@@ -72,8 +76,9 @@ export function mb_type_func(args) {
     }
   } else {
     let oscmessage = zmqoscsocket.recv_str(zmq.DONTWAIT)
-    if (oscmessage) {
+    while (oscmessage) {
       handleOSC(oscmessage)
+      oscmessage = zmqoscsocket.recv_str(zmq.DONTWAIT)
     }
     try {
       nb_frames = clean_live_working();

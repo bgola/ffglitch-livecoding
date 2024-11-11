@@ -332,7 +332,11 @@ let glitch_live = (frame) => { };
 let glitch_live_working = glitch_live;
 
 export function glitch_frame(frame) {
-  let message = zmqsocket.recv_str(zmq.DONTWAIT);
+  let message;
+  try {
+    message = zmqsocket.recv_str(zmq.DONTWAIT);
+  } catch {
+  }
   if (message) {
     try {
       eval(message)
@@ -347,8 +351,9 @@ export function glitch_frame(frame) {
     }
   } else {
     let oscmessage = zmqoscsocket.recv_str(zmq.DONTWAIT)
-    if (oscmessage) {
+    while (oscmessage) {
       handleOSC(oscmessage)
+      oscmessage = zmqoscsocket.recv_str(zmq.DONTWAIT)
     }
     try {
       glitch_live_working(frame)
