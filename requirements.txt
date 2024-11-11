@@ -1,3 +1,9 @@
-pyzmq==26.2.0
-watchdog==5.0.3
+asyncqt==0.8.0
+puremagic==1.28
+PyQt5==5.15.11
+PyQt5-Qt5==5.15.15
+PyQt5_sip==12.15.0
 python-osc==1.9.0
+pyzmq==26.2.0
+qasync==0.27.1
+watchdog==5.0.3
