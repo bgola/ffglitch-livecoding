@@ -10,6 +10,7 @@ from qasync import QEventLoop, QApplication, asyncSlot, asyncClose
 import zmq
 import zmq.asyncio
 import os
+import platform
 import sys
 import asyncio
 import puremagic
@@ -117,7 +118,7 @@ class FFQtApp(QWidget):
         self.runBtloop.clicked.connect(self.runLoopFile)
         layout.addWidget(self.runBtloop)
 
-        self.runBtwebcam = QPushButton("Run with webcam (Mac OS)", self)
+        self.runBtwebcam = QPushButton("Run with webcam (Mac OS and Linux)", self)
         self.runBtwebcam.clicked.connect(self.runWebcam)
         layout.addWidget(self.runBtwebcam)
 
@@ -138,6 +139,9 @@ class FFQtApp(QWidget):
 
     @asyncSlot()
     async def runWebcam(self):
+        await self._run_webcam()
+
+    async def _run_webcam(self):
         self._media_file = ""
         self._webcam = True
         await self.run()
@@ -189,8 +193,11 @@ class FFQtApp(QWidget):
                 ffgac_cmd = ffgac_cmd % f"-stream_loop -1 -i {self._media_file}"
             elif self._media_file_type == "img":
                 ffgac_cmd = ffgac_cmd % f"-loop 1 -i {self._media_file} -t 100000000" 
-        elif self._webcam:
-            ffgac_cmd = ffgac_cmd  % "-f avfoundation -r 30 -video_size 1280x720 -i default"
+        elif self._webcam and platform.system() in ["Linux", "Darwin"]:
+            if platform.system() == "Darwin":
+                ffgac_cmd = ffgac_cmd  % "-f avfoundation -r 30 -video_size 1280x720 -i default"
+            else:
+                ffgac_cmd = ffgac_cmd  % "-i /dev/video0"
         else:
             ffgac_cmd = ffgac_cmd % "-listen 1 -i rtmp://127.0.0.1:5550/live"
 
@@ -298,6 +305,9 @@ class FFQtApp(QWidget):
             filename = args[0]
             await self._loopWithFile(filename)
 
+        async def webcam(address, *args):
+            await self._run_webcam()
+
         def sync_wrapper(handler):
             def wrapper(address, *args):
                 asyncio.ensure_future(handler(address, *args))
@@ -309,6 +319,7 @@ class FFQtApp(QWidget):
         # GUI commands
         dispatcher.map("/watch", set_watched_file)
         dispatcher.map("/loop", sync_wrapper(new_loop_file))
+        dispatcher.map("/webcam", sync_wrapper(webcam))
 
         server = osc_server.AsyncIOOSCUDPServer(("0.0.0.0", 5558), dispatcher, asyncio.get_event_loop())
         transport, protocol = await server.create_serve_endpoint()
