@@ -31,7 +31,7 @@ class FileChecker(object):
 
     async def _send_if_is_watched_file(self, event):
         if os.path.basename(event.src_path) == self.filename:
-            with open(self.filename, 'r') as file:
+            with open(event.src_path, 'r') as file:
                 code = file.read()
                 for socket in self.sockets:
                     try:
