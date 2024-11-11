@@ -70,6 +70,8 @@ class FFQtApp(QWidget):
         self._media_file = ""
         self._media_file_type = None
         self._webcam = False
+        self._zmq_running = False
+        self._osc_running = False
         self._setupUI()
     
     def _setupUI(self):
@@ -101,7 +103,7 @@ class FFQtApp(QWidget):
 
 
         self.restartFFBt = QPushButton("Restart ffglitch", self)
-        self.restartFFBt.clicked.connect(self.restart_ffglitch)
+        self.restartFFBt.clicked.connect(self.restart_ffglitch_cb)
         layout.addWidget(self.restartFFBt)
         
         # Set up window
@@ -160,7 +162,7 @@ class FFQtApp(QWidget):
         elif self._webcam:
             ffgac_cmd = ffgac_cmd  % "-f avfoundation -r 30 -video_size 1280x720 -i default"
         else:
-            ffgac_cmd = ffgac_cmd % "-listen 1 -i rtmp://127.0.0.1:5559/live"
+            ffgac_cmd = ffgac_cmd % "-listen 1 -i rtmp://127.0.0.1:5550/live"
 
         self._ffgac = await asyncio.create_subprocess_shell(
                 ffgac_cmd,
@@ -180,15 +182,14 @@ class FFQtApp(QWidget):
                  self._fflive.communicate()
                  )
 
-    @asyncSlot()
-    async def run_task(self):
-        await self.run_ffglitch()
-
     @asyncClose
     async def closeEvent(self, event):
         await self.stop_ffglitch()
 
     @asyncSlot()
+    async def restart_ffglitch_cb(self):
+        await self.restart_ffglitch()
+
     async def restart_ffglitch(self):
         await self.stop_ffglitch()
         await self.run_ffglitch()
@@ -211,20 +212,22 @@ class FFQtApp(QWidget):
 
     async def run(self):
         file = self._file
-        zmq_sockets = zmq_create_sockets()
-    
-        directory, checker = watchdog_prepare_file_checker(file, zmq_sockets)
-        watchdog_start(directory, checker)
-    
-        osc_loop = osc_start_server()
-        zmq_loop = zmq_start_servers(zmq_sockets)
+  
+        routines = []
+        if not self._osc_running:
+            routines.append(osc_start_server(self))
+            self._osc_running = True
 
-        print(f"Watchdog is ready... you can now edit {file}")
-        await asyncio.gather(
-            osc_loop,
-            zmq_loop,
-            self.run_ffglitch()
-            )
+        if not self._zmq_running:
+            zmq_sockets = zmq_create_sockets()
+            directory, checker = watchdog_prepare_file_checker(file, zmq_sockets)
+            watchdog_start(directory, checker)
+            routines.append(zmq_start_servers(zmq_sockets))
+            self._zmq_running = True
+
+        routines.append(self.restart_ffglitch())
+        self.statusbar.showMessage(f"Watchdog is ready... you can now edit {file}")
+        await asyncio.gather(*routines)
 
 
 async def start_zmq_server(socket):
@@ -286,11 +289,6 @@ def watchdog_prepare_file_checker(file, zmq_sockets):
 
 
 if __name__ == "__main__":
-    #import argparse
-    #parser = argparse.ArgumentParser(sys.argv[0], description="Runs the watchdog to check for changes in a livecoding script")
-    #parser.add_argument("file", help="A JavaScript file to watch for changes.", type=str)
-    #args = parser.parse_args()
-    
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
@@ -300,10 +298,7 @@ if __name__ == "__main__":
     window = FFQtApp()
     window.show()
 
-    #loop.create_task(window.main())
-
     try:
-        #asyncio.run(main(args.file))
         with loop:
             loop.run_until_complete(app_close_event.wait())
             loop.close()
