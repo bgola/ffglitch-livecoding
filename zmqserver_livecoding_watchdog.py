@@ -4,6 +4,7 @@ from watchdog.observers import Observer
 from PyQt5.QtWidgets import (
         QWidget, QLabel, QVBoxLayout, QPushButton, QFileDialog, QStatusBar
         )
+from PyQt5.QtCore import QObject, pyqtSignal
 from qasync import QEventLoop, QApplication, asyncSlot, asyncClose
 
 import zmq
@@ -48,7 +49,6 @@ class FileChecker(object):
                         # between REQ and REP messages
                         pass
 
-
     async def on_modified(self, event):
         await self._send_if_is_watched_file(event)
     
@@ -60,24 +60,45 @@ class FileChecker(object):
         if handler is not None:
             self._loop.call_soon_threadsafe(self._ensure_future, handler(event))
 
+class AsyncFileDialog(QObject):
+    file_chosen = pyqtSignal(str)
+
+    def __init__(self, title, filters):
+        super().__init__(None)
+        self.dialog = QFileDialog()
+        self.dialog.setWindowTitle(title)
+        self.dialog.setNameFilter(filters)
+
+    def open(self):
+        self.dialog.setFileMode(QFileDialog.ExistingFile)
+        self.dialog.fileSelected.connect(self.file_chosen.emit)
+        
+        self.dialog.open()
+
 
 class FFQtApp(QWidget):
-    def __init__(self):
+    def __init__(self, loop):
         super().__init__()
+        self._loop = loop
         self._ffgac = None
         self._fflive = None
         self._file = ""
         self._media_file = ""
         self._media_file_type = None
         self._webcam = False
-        self._zmq_running = False
-        self._osc_running = False
+        self._fs_observer = None
+        self._fs_checker = None
+
+        self._zmq_sock_live, self._zmq_sock_clean = self.zmq_create_sockets()
+        loop.create_task(self.osc_start_server())
+        loop.create_task(self.zmq_start())
         self._setupUI()
-    
+ 
+    async def zmq_start(self):
+        await self.zmq_start_servers([self._zmq_sock_live, self._zmq_sock_clean])
+
     def _setupUI(self):
         layout = QVBoxLayout()
-        #self.label = QLabel("Choose a file to monitor")
-        #layout.addWidget(self.label)
 
         self.statusbar = QStatusBar(self)
         self.statusbar.showMessage("Choose a file to start monitoring")
@@ -93,14 +114,12 @@ class FFQtApp(QWidget):
         layout.addWidget(self.runBtserver)
 
         self.runBtloop = QPushButton("Run with video/image file", self)
-        self.runBtloop.clicked.connect(self.runChooseFile)
+        self.runBtloop.clicked.connect(self.runLoopFile)
         layout.addWidget(self.runBtloop)
 
         self.runBtwebcam = QPushButton("Run with webcam (Mac OS)", self)
         self.runBtwebcam.clicked.connect(self.runWebcam)
         layout.addWidget(self.runBtwebcam)
-
-
 
         self.restartFFBt = QPushButton("Restart ffglitch", self)
         self.restartFFBt.clicked.connect(self.restart_ffglitch_cb)
@@ -123,33 +142,44 @@ class FFQtApp(QWidget):
         self._webcam = True
         await self.run()
 
-    @asyncSlot()
-    async def runChooseFile(self):
-        self._webcam = False
-        file, _ = QFileDialog.getOpenFileName(self, "Choose a file", "", "All files (*)")
-        if file:
-            self._media_file = file
-            self._media_file_type = None
-            try:
-                file_type = puremagic.magic_file(file)[0]
-                if file_type.mime_type.startswith("image"):
-                    self._media_file_type = "img"
-                elif file_type.mime_type.startswith("video"):
-                    self._media_file_type = "vid"
-            except puremagic.PureError:
-                pass
+    async def openFileDialog(self, title, filters):
+        dialog = AsyncFileDialog(title, filters)
+        future = self._loop.create_future()
+        dialog.file_chosen.connect(lambda file_name: future.set_result(file_name))
+        dialog.open()
+        file = await future
+        return file
 
-            if self._media_file_type is None:
-                self.statusbar.showMessage("Failed to open file, is it image/video ?")
-            else:
-                await self.run()
+    @asyncSlot()
+    async def runLoopFile(self):
+        file = await self.openFileDialog("Choose a file", "All files (*)")
+        if file:
+            await self._loopWithFile(file)
+
+    async def _loopWithFile(self, file):
+        self._webcam = False
+        self._media_file = file
+        self._media_file_type = None
+        try:
+            file_type = puremagic.magic_file(file)[0]
+            if file_type.mime_type.startswith("image"):
+                self._media_file_type = "img"
+            elif file_type.mime_type.startswith("video"):
+                self._media_file_type = "vid"
+        except puremagic.PureError:
+            pass
+
+        if self._media_file_type is None:
+            self.statusbar.showMessage("Failed to open file, is it image/video ?")
+        else:
+            await self.run()
 
     @asyncSlot()
     async def chooseFile(self):
-        file, _ = QFileDialog.getOpenFileName(self, "Choose a file", "", "JavaScript Files (*.js)")
+        file = await self.openFileDialog("Choose a file", "JavaScript Files (*.js)")
         if file:
-            self.statusbar.showMessage(f"File chosen: {file}")
             self._file = file
+            self.watchdog_start()
 
     async def run_ffglitch(self):
         read, write = os.pipe()
@@ -210,82 +240,81 @@ class FFQtApp(QWidget):
             self._ffgac = None
             self._fflive = None
 
+    async def zmq_start_server(self, socket):
+        while True:
+            message = await socket.recv_string()
+            if message and not message.startswith("PING"):
+                reply = message
+                title = "OK"
+                if not reply.startswith("OK"):
+                    title = "FAIL"
+                notification(title, message=reply, app_name='FFLiveCoding')
+
+    def zmq_create_sockets(self):
+        context = zmq.asyncio.Context()
+        cleansocket = context.socket(zmq.REP) 
+        cleansocket.bind("tcp://*:5556")
+
+        livesocket = context.socket(zmq.REP)
+        livesocket.bind("tcp://*:5555")
+
+        return cleansocket, livesocket
+
+    async def zmq_start_servers(self, sockets):
+        await asyncio.gather(*[ self.zmq_start_server(socket) for socket in sockets])
+
+    def watchdog_start(self):
+        directory_to_watch = os.path.dirname(self._file)
+        if not directory_to_watch:
+            directory_to_watch = "./"
+
+        if self._fs_observer is not None:
+            self._fs_observer.stop()
+
+        self._fs_checker = FileChecker(os.path.basename(self._file), [self._zmq_sock_live, self._zmq_sock_clean], loop=self._loop)
+        self._fs_observer = Observer()
+        self._fs_observer.schedule(self._fs_checker, path=directory_to_watch, recursive=False)
+        self._fs_observer.start()
+        self.statusbar.showMessage(f"Currently watching: {self._file}")
+
+    async def osc_start_server(self):
+        context = zmq.Context()
+        oscbridgesocket = context.socket(zmq.PUB)
+        oscbridgesocket.bind("tcp://*:5557")
+
+        def clean_handler(address, *args):
+            oscbridgesocket.send_string("/clean")
+
+        def set_var_handler(address, *args):
+            varname = args[0]
+            value = args[1]
+            oscbridgesocket.send_string(f"/set,{varname},{value}")
+
+        def set_watched_file(address, *args):
+            self._file = args[0]
+            self.watchdog_start()
+
+        async def new_loop_file(address, *args):
+            filename = args[0]
+            await self._loopWithFile(filename)
+
+        def sync_wrapper(handler):
+            def wrapper(address, *args):
+                asyncio.ensure_future(handler(address, *args))
+            return wrapper
+
+        dispatcher = Dispatcher()
+        dispatcher.map("/clean",  clean_handler)
+        dispatcher.map("/set", set_var_handler)
+        # GUI commands
+        dispatcher.map("/watch", set_watched_file)
+        dispatcher.map("/loop", sync_wrapper(new_loop_file))
+
+        server = osc_server.AsyncIOOSCUDPServer(("0.0.0.0", 5558), dispatcher, asyncio.get_event_loop())
+        transport, protocol = await server.create_serve_endpoint()
+
     async def run(self):
-        file = self._file
-  
-        routines = []
-        if not self._osc_running:
-            routines.append(osc_start_server(self))
-            self._osc_running = True
-
-        if not self._zmq_running:
-            zmq_sockets = zmq_create_sockets()
-            directory, checker = watchdog_prepare_file_checker(file, zmq_sockets)
-            watchdog_start(directory, checker)
-            routines.append(zmq_start_servers(zmq_sockets))
-            self._zmq_running = True
-
-        routines.append(self.restart_ffglitch())
-        self.statusbar.showMessage(f"Watchdog is ready... you can now edit {file}")
-        await asyncio.gather(*routines)
-
-
-async def start_zmq_server(socket):
-    while True:
-        message = await socket.recv_string()
-        if message and not message.startswith("PING"):
-            reply = message
-            title = "OK"
-            if not reply.startswith("OK"):
-                title = "FAIL"
-            notification(title, message=reply, app_name='FFLiveCoding')
-
-def zmq_create_sockets():
-    context = zmq.asyncio.Context()
-    cleansocket = context.socket(zmq.REP) 
-    cleansocket.bind("tcp://*:5556")
-
-    livesocket = context.socket(zmq.REP)
-    livesocket.bind("tcp://*:5555")
-
-    return cleansocket, livesocket
-
-
-async def zmq_start_servers(sockets):
-    await asyncio.gather(*[ start_zmq_server(socket) for socket in sockets])
-
-async def osc_start_server(app):
-    context = zmq.Context()
-    oscbridgesocket = context.socket(zmq.PUB)
-    oscbridgesocket.bind("tcp://*:5557")
-
-    def clean_handler(address, *args):
-        oscbridgesocket.send_string("/clean")
-
-    def set_var_handler(address, *args):
-        varname = args[0]
-        value = args[1]
-        print(varname, value)
-        oscbridgesocket.send_string(f"/set,{varname},{value}")
-
-    dispatcher = Dispatcher()
-    dispatcher.map("/clean",  clean_handler)
-    dispatcher.map("/set", set_var_handler)
-    server = osc_server.AsyncIOOSCUDPServer(("0.0.0.0", 5558), dispatcher, asyncio.get_event_loop())
-    transport, protocol = await server.create_serve_endpoint()
-
-def watchdog_start(directory_to_watch, checker):
-    observer = Observer()
-    observer.schedule(checker, path=directory_to_watch, recursive=False)
-    observer.start()
-
-def watchdog_prepare_file_checker(file, zmq_sockets):
-    directory_to_watch = os.path.dirname(file)
-    
-    if not directory_to_watch:
-        directory_to_watch = "./"
-
-    return directory_to_watch, FileChecker(os.path.basename(file), zmq_sockets)
+        await self.restart_ffglitch()
 
 
 if __name__ == "__main__":
@@ -295,8 +324,10 @@ if __name__ == "__main__":
     app_close_event = asyncio.Event()
     app.aboutToQuit.connect(app_close_event.set)
 
-    window = FFQtApp()
+    window = FFQtApp(loop)
     window.show()
+
+    #loop.create_task(window.osc_start_server())
 
     try:
         with loop:
