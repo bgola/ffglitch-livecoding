@@ -122,5 +122,5 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: build-artifacts
+        name: build-artifacts-${{ matrix.name }}
         path: "${{ env.INSTALL_PATH }}/${{env.ARCHIVE_NAME}}"
