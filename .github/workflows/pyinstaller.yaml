@@ -67,9 +67,9 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
-        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-windows-x86-64.zip
-        unzip ffglitch-0.10.2-windows-x86-64.zip
-        mv ffglitch-0.10.2-windows-x86-64 bin/
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-windows-x86_64.zip
+        unzip ffglitch-0.10.2-windows-x86_64.zip
+        mv ffglitch-0.10.2-windows-x86_64 bin/
 
     # Build
     - name: Prepare pyinstaller
