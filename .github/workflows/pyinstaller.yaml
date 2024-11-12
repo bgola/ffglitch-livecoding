@@ -32,12 +32,14 @@ jobs:
       ARCHIVE_NAME: ffglitch-livecoding-${{ matrix.name }}.zip
 
     steps:
-    - name: Checkout 
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v5
+    - name: Update python
+      uses: actions/setup-python@v5
         with:
           python-version: '3.13' 
 
+    - name: Checkout 
+      uses: actions/checkout@v2
+    
     - name: Download ffglitch binaries
       if: runner.os == 'Linux'
       shell: bash
