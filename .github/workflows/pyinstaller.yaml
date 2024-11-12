@@ -45,14 +45,22 @@ jobs:
         mv ffglitch-0.10.2-linux-x86_64 bin/
 
     - name: Download ffglitch binaries
-      if: runner.os == "macOS"
-      if: runner.arch == "arm64"
+      if: runner.os == "macOS" && runner.arch == "arm64"
       shell: bash
       run: |
         cd $BUILD_PATH
         curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-aarch64.zip
         unzip ffglitch-0.10.2-macos-aarch64.zip
         mv ffglitch-0.10.2-macos-aarch64 bin/
+
+    - name: Download ffglitch binaries
+      if: runner.os == "macOS" && runner.arch == "x86-64"
+      shell: bash
+      run: |
+        cd $BUILD_PATH
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-x86_64.zip
+        unzip ffglitch-0.10.2-macos-x86_64.zip
+        mv ffglitch-0.10.2-macos-x86_64 bin/
 
     - name: Download ffglitch binaries
       if: runner.os == "Windows"
@@ -64,7 +72,6 @@ jobs:
         mv ffglitch-0.10.2-windows-x86-64 bin/
 
     # Build
-    
     - name: Prepare pyinstaller
       if: runner.os != "Windows"
       shell: bash
