@@ -34,6 +34,9 @@ jobs:
     steps:
     - name: Checkout 
       uses: actions/checkout@v2
+      uses: actions/setup-python@v5
+        with:
+          python-version: '3.13' 
 
     - name: Download ffglitch binaries
       if: runner.os == 'Linux'
