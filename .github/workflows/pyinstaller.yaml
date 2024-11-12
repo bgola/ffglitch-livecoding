@@ -40,7 +40,7 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
-        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-linux-x86_64.zip
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-linux-x86_64.zip -o ffglitch-0.10.2-linux-x86_64.zip
         unzip ffglitch-0.10.2-linux-x86_64.zip
         mv ffglitch-0.10.2-linux-x86_64 bin/
 
@@ -49,7 +49,7 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
-        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-aarch64.zip
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-aarch64.zip -o ffglitch-0.10.2-macos-aarch64.zip
         unzip ffglitch-0.10.2-macos-aarch64.zip
         mv ffglitch-0.10.2-macos-aarch64 bin/
 
@@ -58,7 +58,7 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
-        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-x86_64.zip
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-x86_64.zip -o ffglitch-0.10.2-macos-x86_64.zip
         unzip ffglitch-0.10.2-macos-x86_64.zip
         mv ffglitch-0.10.2-macos-x86_64 bin/
 
@@ -67,7 +67,7 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
-        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-windows-x86_64.zip
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-windows-x86_64.zip -o ffglitch-0.10.2-windows-x86_64.zip
         unzip ffglitch-0.10.2-windows-x86_64.zip
         mv ffglitch-0.10.2-windows-x86_64 bin/
 
