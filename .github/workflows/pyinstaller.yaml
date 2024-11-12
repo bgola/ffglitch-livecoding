@@ -111,13 +111,13 @@ jobs:
       if: runner.os != 'Windows'
       shell: bash
       working-directory: ${{ env.INSTALL_PATH }}
-      run: zip -r "$ARCHIVE_NAME" "zmqserver_livecoding_watchdog*"
+      run: zip -r "$ARCHIVE_NAME" zmqserver_livecoding_watchdog*
 
     - name: Zip up build (Windows)
       if: runner.os == 'Windows'
       shell: bash
       working-directory: ${{ env.INSTALL_PATH }}
-      run: 7z a "$ARCHIVE_NAME" -tzip "zmqserver_livecoding_watchdog*"
+      run: 7z a "$ARCHIVE_NAME" -tzip zmqserver_livecoding_watchdog*
 
 
     - name: Upload artifact
