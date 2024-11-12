@@ -1,0 +1,116 @@
+on:
+  push:
+    branches:
+      - GUI
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    permissions: write-all
+    name: ${{ matrix.name }}
+    strategy:
+      matrix:
+        include:
+          - name: 'Linux-x64'
+            os: ubuntu-latest
+
+          - name: 'macOS-x64'
+            arch: x86-64
+            os: macos-latest
+
+          - name: 'macOS-arm64'
+            arch: arm64
+            os: macos-latest
+
+          - name: 'Windows-x64'
+            arch: x86-64
+            os: windows-latest
+
+    env:
+      BUILD_PATH: ${{ github.workspace }}/
+      INSTALL_PATH: ${{ github.workspace }}/dist
+      ARCHIVE_NAME: ffglitch-livecoding-${{ matrix.name }}.zip
+
+    steps:
+    - name: Checkout 
+      uses: actions/checkout@v2
+
+    - name: Download ffglitch binaries
+      if: runner.os == "Linux"
+      shell: bash
+      run: |
+        cd $BUILD_PATH
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-linux-x86_64.zip
+        unzip ffglitch-0.10.2-linux-x86_64.zip
+        mv ffglitch-0.10.2-linux-x86_64 bin/
+
+    - name: Download ffglitch binaries
+      if: runner.os == "macOS"
+      if: runner.arch == "arm64"
+      shell: bash
+      run: |
+        cd $BUILD_PATH
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-aarch64.zip
+        unzip ffglitch-0.10.2-macos-aarch64.zip
+        mv ffglitch-0.10.2-macos-aarch64 bin/
+
+    - name: Download ffglitch binaries
+      if: runner.os == "Windows"
+      shell: bash
+      run: |
+        cd $BUILD_PATH
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-windows-x86-64.zip
+        unzip ffglitch-0.10.2-windows-x86-64.zip
+        mv ffglitch-0.10.2-windows-x86-64 bin/
+
+    # Build
+    
+    - name: Prepare pyinstaller
+      if: runner.os != "Windows"
+      shell: bash
+      run: |
+        python -m venv env
+        . env/bin/activate
+        pip install pyinstaller 
+
+    - name: Prepare pyinstaller
+      if: runner.os == "Windows"
+      shell: bash
+      run: |
+        python -m venv env
+        . env/Scripts/activate
+        pip install pyinstaller 
+ 
+    - name: Run pyinstaller
+      if: runner.os != "Windows"
+      shell: bash
+      run: |
+        cd $BUILD_PATH
+        pyinstaller zmqserver_livecoding_watchdog.py --onefile --windowed --add-data "scripts:scripts" --add-data "bin:bin"
+
+    - name: Run pyinstaller
+      if: runner.os == "Windows"
+      shell: bash
+      run: |
+        cd $BUILD_PATH
+        pyinstaller zmqserver_livecoding_watchdog.py --onefile --windowed --add-data "scripts;scripts" --add-data "bin;bin"
+
+    # Gather all files in a zip
+    - name: Zip up build (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      working-directory: ${{ env.INSTALL_PATH }}
+      run: zip -r "$ARCHIVE_NAME" "zmqserver_livecoding_watchdog*"
+
+    - name: Zip up build (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      working-directory: ${{ env.INSTALL_PATH }}
+      run: 7z a "$ARCHIVE_NAME" -tzip "zmqserver_livecoding_watchdog*"
+
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: "${{ github.workspace }}/${{env.ARCHIVE_NAME}}"

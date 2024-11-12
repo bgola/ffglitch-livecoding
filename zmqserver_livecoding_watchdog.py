@@ -20,7 +20,12 @@ try:
 except:
     notification = lambda title, message, app_name: print(f"Result: {title}\n\t{message}")
 
-FFLIVE_CMD = "./bin/fflive -i pipe: -s scripts/livecoding.js"
+def get_resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return relative_path
+
+FFLIVE_CMD = f"{get_resource_path('./bin/fflive')} -i pipe: -s {get_resource_path('scripts/livecoding.js')}"
 
 class FileChecker(object):
     # Based on Hachiko's Event Handler
@@ -187,7 +192,7 @@ class FFQtApp(QWidget):
 
     async def run_ffglitch(self):
         read, write = os.pipe()
-        ffgac_cmd = "./bin/ffgac %s -vcodec mpeg4 -mpv_flags +nopimb+forcemv -qscale:v 1 -fcode 5 -g max -sc_threshold max -mb_type_script scripts/mb_type_func_live_simple.js -f rawvideo pipe:"
+        ffgac_cmd = f"{get_resource_path('./bin/ffgac')} %s -vcodec mpeg4 -mpv_flags +nopimb+forcemv -qscale:v 1 -fcode 5 -g max -sc_threshold max -mb_type_script {get_resource_path('scripts/mb_type_func_live_simple.js')} -f rawvideo pipe:"
         if self._media_file:
             if self._media_file_type == "vid":
                 ffgac_cmd = ffgac_cmd % f"-stream_loop -1 -i {self._media_file}"
