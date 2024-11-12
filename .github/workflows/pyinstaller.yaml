@@ -76,6 +76,7 @@ jobs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
+        cd $BUILD_PATH
         python -m venv env
         . env/bin/activate
         pip install pyinstaller 
@@ -84,6 +85,7 @@ jobs:
       if: runner.os == 'Windows'
       shell: bash
       run: |
+        cd $BUILD_PATH
         python -m venv env
         . env/Scripts/activate
         pip install pyinstaller 
@@ -93,6 +95,7 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
+        . env/bin/activate
         pyinstaller zmqserver_livecoding_watchdog.py --onefile --windowed --add-data "scripts:scripts" --add-data "bin:bin"
 
     - name: Run pyinstaller
@@ -100,6 +103,7 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
+        . env/Scripts/activate
         pyinstaller zmqserver_livecoding_watchdog.py --onefile --windowed --add-data "scripts;scripts" --add-data "bin;bin"
 
     # Gather all files in a zip
