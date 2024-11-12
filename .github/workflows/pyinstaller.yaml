@@ -36,7 +36,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Download ffglitch binaries
-      if: runner.os == "Linux"
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         cd $BUILD_PATH
@@ -45,7 +45,7 @@ jobs:
         mv ffglitch-0.10.2-linux-x86_64 bin/
 
     - name: Download ffglitch binaries
-      if: runner.os == "macOS" && runner.arch == "arm64"
+      if: runner.os == 'macOS' && runner.arch == 'arm64'
       shell: bash
       run: |
         cd $BUILD_PATH
@@ -54,7 +54,7 @@ jobs:
         mv ffglitch-0.10.2-macos-aarch64 bin/
 
     - name: Download ffglitch binaries
-      if: runner.os == "macOS" && runner.arch == "x86-64"
+      if: runner.os == 'macOS' && runner.arch == 'x86-64'
       shell: bash
       run: |
         cd $BUILD_PATH
@@ -63,7 +63,7 @@ jobs:
         mv ffglitch-0.10.2-macos-x86_64 bin/
 
     - name: Download ffglitch binaries
-      if: runner.os == "Windows"
+      if: runner.os == 'Windows'
       shell: bash
       run: |
         cd $BUILD_PATH
@@ -73,7 +73,7 @@ jobs:
 
     # Build
     - name: Prepare pyinstaller
-      if: runner.os != "Windows"
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         python -m venv env
@@ -81,7 +81,7 @@ jobs:
         pip install pyinstaller 
 
     - name: Prepare pyinstaller
-      if: runner.os == "Windows"
+      if: runner.os == 'Windows'
       shell: bash
       run: |
         python -m venv env
@@ -89,14 +89,14 @@ jobs:
         pip install pyinstaller 
  
     - name: Run pyinstaller
-      if: runner.os != "Windows"
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         cd $BUILD_PATH
         pyinstaller zmqserver_livecoding_watchdog.py --onefile --windowed --add-data "scripts:scripts" --add-data "bin:bin"
 
     - name: Run pyinstaller
-      if: runner.os == "Windows"
+      if: runner.os == 'Windows'
       shell: bash
       run: |
         cd $BUILD_PATH
