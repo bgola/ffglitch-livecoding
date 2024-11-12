@@ -2,7 +2,8 @@ from pythonosc.dispatcher import Dispatcher
 from pythonosc import osc_server
 from watchdog.observers import Observer
 from PyQt5.QtWidgets import (
-        QWidget, QLabel, QVBoxLayout, QPushButton, QFileDialog, QStatusBar
+        QWidget, QLabel, QVBoxLayout, QPushButton, QFileDialog, QStatusBar,
+        QMessageBox
         )
 from PyQt5.QtCore import QObject, pyqtSignal
 from qasync import QEventLoop, QApplication, asyncSlot, asyncClose
@@ -25,11 +26,11 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return relative_path
 
-FFLIVE_CMD = f"{get_resource_path('./bin/fflive')} -i pipe: -s {get_resource_path('scripts/livecoding.js')}"
+FFLIVE_CMD = f"\"{get_resource_path('./bin/fflive')}\" -hide_banner -loglevel error -i pipe: -s \"{get_resource_path('scripts/livecoding.js')}\""
 
 class FileChecker(object):
     # Based on Hachiko's Event Handler
-    def __init__(self, filename, sockets, loop=None):
+    def __init__(self, filename, app, loop=None):
         self._loop = loop or asyncio.get_event_loop()
         if hasattr(asyncio, "create_task"):
             self._ensure_future = asyncio.create_task
@@ -41,19 +42,11 @@ class FileChecker(object):
         }
         
         self.filename = filename
-        self.sockets = sockets
+        self._app = app
 
     async def _send_if_is_watched_file(self, event):
         if os.path.basename(event.src_path) == self.filename:
-            with open(event.src_path, 'r') as file:
-                code = file.read()
-                for socket in self.sockets:
-                    try:
-                        await socket.send_string(code)
-                    except zmq.error.ZMQError as e:
-                        # Ignore errors from ZMQ, possibly just an issue of sync
-                        # between REQ and REP messages
-                        pass
+            await self._app.send_code()
 
     async def on_modified(self, event):
         await self._send_if_is_watched_file(event)
@@ -83,9 +76,10 @@ class AsyncFileDialog(QObject):
 
 
 class FFQtApp(QWidget):
-    def __init__(self, loop):
+    def __init__(self, app, loop):
         super().__init__()
         self._loop = loop
+        self._app = app
         self._ffgac = None
         self._fflive = None
         self._file = ""
@@ -96,6 +90,10 @@ class FFQtApp(QWidget):
         self._fs_checker = None
 
         self._zmq_sock_live, self._zmq_sock_clean = self.zmq_create_sockets()
+        self._should_send_code = {
+                self._zmq_sock_live: False,
+                self._zmq_sock_clean: False
+                }
         loop.create_task(self.osc_start_server())
         loop.create_task(self.zmq_start())
         self._setupUI()
@@ -103,15 +101,24 @@ class FFQtApp(QWidget):
     async def zmq_start(self):
         await self.zmq_start_servers([self._zmq_sock_live, self._zmq_sock_clean])
 
+    async def send_code(self):
+        sockets = [self._zmq_sock_live, self._zmq_sock_clean]
+        with open(self._file, 'r') as file:
+            code = file.read()
+            for socket in sockets:
+                if self._should_send_code[socket]:
+                    await socket.send_string(code)
+                    self._should_send_code[socket] = False
+
     def _setupUI(self):
         layout = QVBoxLayout()
 
         self.statusbar = QStatusBar(self)
-        self.statusbar.showMessage("Choose a file to start monitoring")
+        self.statusbar.showMessage("FFGlitch Livecoding")
         layout.addWidget(self.statusbar)
 
 
-        self.chooseFileButton = QPushButton("Choose File to Watch", self)
+        self.chooseFileButton = QPushButton("Choose a script to monitor", self)
         self.chooseFileButton.clicked.connect(self.chooseFile)
         layout.addWidget(self.chooseFileButton)
 
@@ -138,6 +145,9 @@ class FFQtApp(QWidget):
         
     @asyncSlot()
     async def runRTMP(self):
+        await self._run_rtmp()
+
+    async def _run_rtmp(self):
         self._media_file = ""
         self._webcam = False
         await self.run()
@@ -192,37 +202,41 @@ class FFQtApp(QWidget):
 
     async def run_ffglitch(self):
         read, write = os.pipe()
-        ffgac_cmd = f"{get_resource_path('./bin/ffgac')} %s -vcodec mpeg4 -mpv_flags +nopimb+forcemv -qscale:v 1 -fcode 5 -g max -sc_threshold max -mb_type_script {get_resource_path('scripts/mb_type_func_live_simple.js')} -f rawvideo pipe:"
+        ffgac_cmd = f"\"{get_resource_path('./bin/ffgac')}\" -hide_banner -loglevel error %s -vcodec mpeg4 -mpv_flags +nopimb+forcemv -qscale:v 1 -fcode 5 -g max -sc_threshold max -mb_type_script \"{get_resource_path('scripts/mb_type_func_live_simple.js')}\" -f rawvideo pipe:"
+        status_msg = ""
         if self._media_file:
             if self._media_file_type == "vid":
-                ffgac_cmd = ffgac_cmd % f"-stream_loop -1 -i {self._media_file}"
+                ffgac_cmd = ffgac_cmd % f"-stream_loop -1 -i \"{self._media_file}\""
             elif self._media_file_type == "img":
-                ffgac_cmd = ffgac_cmd % f"-loop 1 -i {self._media_file} -t 100000000" 
+                ffgac_cmd = ffgac_cmd % f"-loop 1 -i \"{self._media_file}\" -t 1000000" 
+            status_msg = f"Now playing: {os.path.basename(self._media_file)}"
         elif self._webcam and platform.system() in ["Linux", "Darwin"]:
             if platform.system() == "Darwin":
                 ffgac_cmd = ffgac_cmd  % "-f avfoundation -r 30 -video_size 1280x720 -i default"
             else:
                 ffgac_cmd = ffgac_cmd  % "-i /dev/video0"
+            status_msg = f"Now in webcam mode"
         else:
-            ffgac_cmd = ffgac_cmd % "-listen 1 -i rtmp://127.0.0.1:5550/live"
+            ffgac_cmd = ffgac_cmd % "-listen 1 -i rtmp://0.0.0.0:5550/live"
+            status_msg = "Stream with RTMP via rtmp://127.0.0.1:5550/live ..." 
 
         self._ffgac = await asyncio.create_subprocess_shell(
                 ffgac_cmd,
                 stdout=write,
-                stderr=asyncio.subprocess.PIPE
                 )
         os.close(write)
         self._fflive = await asyncio.create_subprocess_shell(
                 FFLIVE_CMD,
                 stdin=read,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
                 )
         os.close(read)
+        self.statusbar.showMessage(status_msg)
         await asyncio.gather(
                  self._ffgac.communicate(),
                  self._fflive.communicate()
                  )
+       
 
     @asyncClose
     async def closeEvent(self, event):
@@ -255,6 +269,7 @@ class FFQtApp(QWidget):
     async def zmq_start_server(self, socket):
         while True:
             message = await socket.recv_string()
+            self._should_send_code[socket] = True
             if message and not message.startswith("PING"):
                 reply = message
                 title = "OK"
@@ -265,10 +280,18 @@ class FFQtApp(QWidget):
     def zmq_create_sockets(self):
         context = zmq.asyncio.Context()
         cleansocket = context.socket(zmq.REP) 
-        cleansocket.bind("tcp://*:5556")
+        try:
+            cleansocket.bind("tcp://*:5556")
+        except zmq.error.ZMQError:
+            QMessageBox.critical(None, "FFGlitch-Livecoding Error","Failed to bind to port :5556, maybe the program is already running?")
+            sys.exit(1)
 
         livesocket = context.socket(zmq.REP)
-        livesocket.bind("tcp://*:5555")
+        try:
+            livesocket.bind("tcp://*:5555")
+        except zmq.error.ZMQError:
+            QMessageBox.critical(None, "FFGlitch-Livecoding Error","Failed to bind to port :5555, maybe the program is already running?")
+            sys.exit(1)
 
         return cleansocket, livesocket
 
@@ -283,7 +306,7 @@ class FFQtApp(QWidget):
         if self._fs_observer is not None:
             self._fs_observer.stop()
 
-        self._fs_checker = FileChecker(os.path.basename(self._file), [self._zmq_sock_live, self._zmq_sock_clean], loop=self._loop)
+        self._fs_checker = FileChecker(os.path.basename(self._file), self, loop=self._loop)
         self._fs_observer = Observer()
         self._fs_observer.schedule(self._fs_checker, path=directory_to_watch, recursive=False)
         self._fs_observer.start()
@@ -292,7 +315,11 @@ class FFQtApp(QWidget):
     async def osc_start_server(self):
         context = zmq.Context()
         oscbridgesocket = context.socket(zmq.PUB)
-        oscbridgesocket.bind("tcp://*:5557")
+        try:
+            oscbridgesocket.bind("tcp://*:5557")
+        except zmq.error.ZMQError:
+            QMessageBox.critical(None, "FFGlitch-Livecoding Error","Failed to bind to port :5557, maybe the program is already running?")
+            sys.exit(1)
 
         def clean_handler(address, *args):
             oscbridgesocket.send_string("/clean")
@@ -313,6 +340,9 @@ class FFQtApp(QWidget):
         async def webcam(address, *args):
             await self._run_webcam()
 
+        async def rtmp(address, *args):
+            await self._run_rtmp()
+
         def sync_wrapper(handler):
             def wrapper(address, *args):
                 asyncio.ensure_future(handler(address, *args))
@@ -325,6 +355,7 @@ class FFQtApp(QWidget):
         dispatcher.map("/watch", set_watched_file)
         dispatcher.map("/loop", sync_wrapper(new_loop_file))
         dispatcher.map("/webcam", sync_wrapper(webcam))
+        dispatcher.map("/rtmp", sync_wrapper(rtmp))
 
         server = osc_server.AsyncIOOSCUDPServer(("0.0.0.0", 5558), dispatcher, asyncio.get_event_loop())
         transport, protocol = await server.create_serve_endpoint()
@@ -340,7 +371,7 @@ if __name__ == "__main__":
     app_close_event = asyncio.Event()
     app.aboutToQuit.connect(app_close_event.set)
 
-    window = FFQtApp(loop)
+    window = FFQtApp(app,loop)
     window.show()
 
     #loop.create_task(window.osc_start_server())
