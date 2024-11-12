@@ -85,6 +85,7 @@ jobs:
         python -m venv env
         . env/bin/activate
         pip install pyinstaller 
+        pip install -r requirements.txt 
 
     - name: Prepare pyinstaller
       if: runner.os == 'Windows'
