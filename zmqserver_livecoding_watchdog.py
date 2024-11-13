@@ -8,13 +8,14 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QObject, pyqtSignal
 from qasync import QEventLoop, QApplication, asyncSlot, asyncClose
 
-import zmq
-import zmq.asyncio
+import asyncio
+import logging
 import os
 import platform
 import sys
-import asyncio
 import puremagic
+import zmq
+import zmq.asyncio
 
 try:
     from notify import notification
@@ -142,7 +143,31 @@ class FFQtApp(QWidget):
         self.setLayout(layout)
         self.setWindowTitle('FFglitch livecoding')
         self.setGeometry(300, 300, 400, 300)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        files = [url.toLocalFile() for url in event.mimeData().urls()]
         
+        for file_path in files:
+            file_type = puremagic.magic_file(file_path)
+            if len(file_type) > 0:
+                if file_type[0].mime_type.endswith("javascript"):
+                    self._watch_file(file_path)
+                elif file_type[0].mime_type.startswith("video") or file_type[0].mime_type.startswith("image"):
+                    self._loop.create_task(self._loopWithFile(file_path))
+                else:
+                    self.statusbar.showMessage(f"Unknown file format: {file_path}")
+            else:
+                self.statusbar.showMessage(f"Unknown file: {file_path}")
+
+
+
     @asyncSlot()
     async def runRTMP(self):
         await self._run_rtmp()
@@ -181,15 +206,16 @@ class FFQtApp(QWidget):
         self._media_file_type = None
         try:
             file_type = puremagic.magic_file(file)[0]
-            if file_type.mime_type.startswith("image"):
-                self._media_file_type = "img"
-            elif file_type.mime_type.startswith("video"):
-                self._media_file_type = "vid"
+            if len(file_type) > 0:
+                if file_type[0].mime_type.startswith("image"):
+                    self._media_file_type = "img"
+                elif file_type[0].mime_type.startswith("video"):
+                    self._media_file_type = "vid"
         except puremagic.PureError:
             pass
 
         if self._media_file_type is None:
-            self.statusbar.showMessage("Failed to open file, is it image/video ?")
+            self.statusbar.showMessage("Failed to open file, is it an image/video ?")
         else:
             await self.run()
 
@@ -197,8 +223,11 @@ class FFQtApp(QWidget):
     async def chooseFile(self):
         file = await self.openFileDialog("Choose a file", "JavaScript Files (*.js)")
         if file:
-            self._file = file
-            self.watchdog_start()
+            self._watch_file(file)
+    
+    def _watch_file(self, file): 
+        self._file = file
+        self.watchdog_start()
 
     async def run_ffglitch(self):
         read, write = os.pipe()
@@ -330,8 +359,7 @@ class FFQtApp(QWidget):
             oscbridgesocket.send_string(f"/set,{varname},{value}")
 
         def set_watched_file(address, *args):
-            self._file = args[0]
-            self.watchdog_start()
+            self._watch_file(args[0])
 
         async def new_loop_file(address, *args):
             filename = args[0]
