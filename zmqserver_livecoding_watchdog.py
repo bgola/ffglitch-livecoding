@@ -125,7 +125,7 @@ class FFQtApp(QWidget):
             code = file.read()
             for socket in sockets:
                 if self._should_send_code[socket]:
-                    self.statusbar.showMessage("Change detected, sending new code")
+                    self.statusbar.showMessage("Sending new code!!")
                     await socket.send_string(code)
                     self._should_send_code[socket] = False
 
@@ -152,6 +152,10 @@ class FFQtApp(QWidget):
         self.runBtwebcam = QPushButton("Run with webcam (Mac OS and Linux)", self)
         self.runBtwebcam.clicked.connect(self.runWebcam)
         layout.addWidget(self.runBtwebcam)
+
+        self.forceSendCodeBt = QPushButton("Resend code", self)
+        self.forceSendCodeBt.clicked.connect(self._resend_code)
+        layout.addWidget(self.forceSendCodeBt)
 
         self.restartFFBt = QPushButton("Restart ffglitch", self)
         self.restartFFBt.clicked.connect(self.restart_ffglitch_cb)
@@ -317,6 +321,13 @@ class FFQtApp(QWidget):
             await asyncio.gather(self._ffgac.wait(), self._fflive.wait())
             self._ffgac = None
             self._fflive = None
+
+    @asyncSlot()
+    async def _resend_code(self):
+        await self._send_code()
+
+    async def _send_code(self):
+        await self.send_code()
 
     async def zmq_start_server(self, socket):
         while True:
