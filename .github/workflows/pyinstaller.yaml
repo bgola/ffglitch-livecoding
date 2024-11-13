@@ -54,7 +54,7 @@ jobs:
       shell: bash
       run: |
         cd $BUILD_PATH
-        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-aarch64.zip -o ffglitch-0.10.2-macos-aarch64.zip
+        curl https://bgo.la/ffglitch-0.10.2-bugfix-builds/ffglitch-0.10.2-macos-11-aarch64.zip -o ffglitch-0.10.2-macos-aarch64.zip
         unzip ffglitch-0.10.2-macos-aarch64.zip
         mv ffglitch-0.10.2-macos-aarch64 bin/
 
