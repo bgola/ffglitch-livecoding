@@ -20,8 +20,23 @@ import zmq.asyncio
 try:
     from notify import notification
 except:
-    notification = lambda title, message, app_name: print(f"Result: {title}\n\t{message}")
+    notification = lambda title, message, app_name: wdlogger.info(f"Result: {title}\n\t{message}")
 
+#logging.basicConfig(level=logging.NOTSET)
+applogger = logging.getLogger(__name__)
+applogger.setLevel(logging.DEBUG)
+applogger.setLevel(logging.DEBUG)
+_stream_handler = logging.StreamHandler()
+_stream_handler.setLevel(logging.DEBUG)
+_stream_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    )
+applogger.addHandler(_stream_handler)
+zmqlogger = applogger.getChild("ZMQ")
+osclogger = applogger.getChild("OSC")
+wdlogger = applogger.getChild("watchdog")
+fflogger = applogger.getChild("ffglitch")
+ 
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
@@ -47,6 +62,7 @@ class FileChecker(object):
 
     async def _send_if_is_watched_file(self, event):
         if os.path.basename(event.src_path) == self.filename:
+            wdlogger.info(f"File '{event.src_path}' was modified, sending new code")
             await self._app.send_code()
 
     async def on_modified(self, event):
@@ -104,10 +120,12 @@ class FFQtApp(QWidget):
 
     async def send_code(self):
         sockets = [self._zmq_sock_live, self._zmq_sock_clean]
+        wdlogger.info("Sending new code")
         with open(self._file, 'r') as file:
             code = file.read()
             for socket in sockets:
                 if self._should_send_code[socket]:
+                    self.statusbar.showMessage("Change detected, sending new code")
                     await socket.send_string(code)
                     self._should_send_code[socket] = False
 
@@ -162,11 +180,13 @@ class FFQtApp(QWidget):
                 elif file_type[0].mime_type.startswith("video") or file_type[0].mime_type.startswith("image"):
                     self._loop.create_task(self._loopWithFile(file_path))
                 else:
-                    self.statusbar.showMessage(f"Unknown file format: {file_path}")
+                    _msg = f"Unknown file format: {file_path}"
+                    applogger.warning(msg)
+                    self.statusbar.showMessage(msg)
             else:
-                self.statusbar.showMessage(f"Unknown file: {file_path}")
-
-
+                _msg = f"Unknown file: {file_path}"
+                applogger.warning(msg)
+                self.statusbar.showMessage(msg)
 
     @asyncSlot()
     async def runRTMP(self):
@@ -205,7 +225,7 @@ class FFQtApp(QWidget):
         self._media_file = file
         self._media_file_type = None
         try:
-            file_type = puremagic.magic_file(file)[0]
+            file_type = puremagic.magic_file(file)
             if len(file_type) > 0:
                 if file_type[0].mime_type.startswith("image"):
                     self._media_file_type = "img"
@@ -215,7 +235,9 @@ class FFQtApp(QWidget):
             pass
 
         if self._media_file_type is None:
-            self.statusbar.showMessage("Failed to open file, is it an image/video ?")
+            _msg = f"Failed to open file {self._media_file}, is it an image/video ?"
+            applogger.warning(_msg)
+            self.statusbar.showMessage(_msg)
         else:
             await self.run()
 
@@ -260,6 +282,7 @@ class FFQtApp(QWidget):
                 stdout=asyncio.subprocess.PIPE,
                 )
         os.close(read)
+        applogger.info(status_msg)
         self.statusbar.showMessage(status_msg)
         await asyncio.gather(
                  self._ffgac.communicate(),
@@ -310,21 +333,28 @@ class FFQtApp(QWidget):
         context = zmq.asyncio.Context()
         cleansocket = context.socket(zmq.REP) 
         try:
+            zmqlogger.info("Binding Clean script socket to port 5556")
             cleansocket.bind("tcp://*:5556")
         except zmq.error.ZMQError:
-            QMessageBox.critical(None, "FFGlitch-Livecoding Error","Failed to bind to port :5556, maybe the program is already running?")
+            _msg = "Failed to bind to port :5556, maybe the program is already running?"
+            zmqlogger.critical(_msg)
+            QMessageBox.critical(None, "FFGlitch-Livecoding Error", _msg)
             sys.exit(1)
 
         livesocket = context.socket(zmq.REP)
         try:
+            zmqlogger.info("Binding Live script socket to port 5555")
             livesocket.bind("tcp://*:5555")
         except zmq.error.ZMQError:
-            QMessageBox.critical(None, "FFGlitch-Livecoding Error","Failed to bind to port :5555, maybe the program is already running?")
+            _msg = "Failed to bind to port :5555, maybe the program is already running?"
+            zmqlogger.critical(_msg)
+            QMessageBox.critical(None, "FFGlitch-Livecoding Error", _msg)
             sys.exit(1)
 
         return cleansocket, livesocket
 
     async def zmq_start_servers(self, sockets):
+        zmqlogger.debug("Starting ZMQ listen sockets")
         await asyncio.gather(*[ self.zmq_start_server(socket) for socket in sockets])
 
     def watchdog_start(self):
@@ -333,42 +363,54 @@ class FFQtApp(QWidget):
             directory_to_watch = "./"
 
         if self._fs_observer is not None:
+            wdlogger.debug("Stopping watchdog")
             self._fs_observer.stop()
-
+    
+        wdlogger.debug("Starting watchdog")
         self._fs_checker = FileChecker(os.path.basename(self._file), self, loop=self._loop)
         self._fs_observer = Observer()
         self._fs_observer.schedule(self._fs_checker, path=directory_to_watch, recursive=False)
         self._fs_observer.start()
-        self.statusbar.showMessage(f"Currently watching: {self._file}")
+        _msg = f"Currently watching: {self._file}"
+        wdlogger.info(_msg)
+        self.statusbar.showMessage(_msg)
 
     async def osc_start_server(self):
         context = zmq.Context()
         oscbridgesocket = context.socket(zmq.PUB)
         try:
+            zmqlogger.info("OSC bridge to ffglitch serving on port 5557")
             oscbridgesocket.bind("tcp://*:5557")
         except zmq.error.ZMQError:
             QMessageBox.critical(None, "FFGlitch-Livecoding Error","Failed to bind to port :5557, maybe the program is already running?")
             sys.exit(1)
 
         def clean_handler(address, *args):
+            osclogger.info("Cleaning")
             oscbridgesocket.send_string("/clean")
 
         def set_var_handler(address, *args):
             varname = args[0]
             value = args[1]
+            osclogger.info(f"Setting '{varname}' to '{value}'")
             oscbridgesocket.send_string(f"/set,{varname},{value}")
 
         def set_watched_file(address, *args):
-            self._watch_file(args[0])
+            filename = args[0]
+            osclogger.info(f"Looping new file ${filename}")
+            self._watch_file(filename)
 
         async def new_loop_file(address, *args):
             filename = args[0]
+            osclogger.info(f"Looping new file ${filename}")
             await self._loopWithFile(filename)
 
         async def webcam(address, *args):
+            osclogger.info("Switching to Webcam")
             await self._run_webcam()
 
         async def rtmp(address, *args):
+            osclogger.info("Switching to RTMP")
             await self._run_rtmp()
 
         def sync_wrapper(handler):
@@ -385,12 +427,12 @@ class FFQtApp(QWidget):
         dispatcher.map("/webcam", sync_wrapper(webcam))
         dispatcher.map("/rtmp", sync_wrapper(rtmp))
 
+        osclogger.info("Starting OSC server on port 5558")
         server = osc_server.AsyncIOOSCUDPServer(("0.0.0.0", 5558), dispatcher, asyncio.get_event_loop())
         transport, protocol = await server.create_serve_endpoint()
 
     async def run(self):
         await self.restart_ffglitch()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -403,11 +445,11 @@ if __name__ == "__main__":
     window.show()
 
     #loop.create_task(window.osc_start_server())
-
     try:
         with loop:
+            applogger.debug("Starting mainloop")
             loop.run_until_complete(app_close_event.wait())
             loop.close()
     except KeyboardInterrupt:
-        print("Closing... bye!")
+        applogger.info("Closing... bye!")
         loop.close()
