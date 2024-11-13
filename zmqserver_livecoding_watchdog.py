@@ -124,10 +124,11 @@ class FFQtApp(QWidget):
         with open(self._file, 'r') as file:
             code = file.read()
             for socket in sockets:
-                if self._should_send_code[socket]:
-                    self.statusbar.showMessage("Sending new code!!")
-                    await socket.send_string(code)
-                    self._should_send_code[socket] = False
+                self.statusbar.showMessage("Sending new code!!")
+                await socket.send_string(code)
+                #if self._should_send_code[socket]:
+                    #await socket.send_string(code)
+                    #self._should_send_code[socket] = False
 
     def _setupUI(self):
         layout = QVBoxLayout()
