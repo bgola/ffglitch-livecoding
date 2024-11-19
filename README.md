@@ -5,7 +5,17 @@ This is some very hacky way to support changing the code dynamically while runni
 
 If you don't know what ffglitch is, check the [webpage](https://ffglitch.org/) and the WIP [tutorial](https://github.com/ramiropolla/ffglitch-scripts/tree/main/tutorial)
 
-To run, first create a virtualenv and install the required libraries:
+**Note:** there is a bug in the current release of ffglitch and it might not work with ffglitch-livecoding on Mac OS or Windows. 
+Builds with the bugfix (thanks to @ramiropolla) are available here at https://bgo.la/ffglitch-0.10.2-bugfix-builds/
+
+In that URL you also find experimental builds of ffglitch-livecoding that should work on your OS (Mac OS X minimum version is 13.0).
+
+Running
+=======
+
+To run, you can either download the build from the link above or follow these steps:
+
+First create a virtualenv and install the required libraries:
 
 ```bash
 git clone https://github.com/bgola/ffglitch-livecoding
@@ -19,35 +29,39 @@ If you use GNU/Linux you can also install `notify-send` from pip to have some ni
 
 `pip install notify-send`
 
-Make a copy of the `template.js` file.
+Download the latest release of ffglitch from [ffglitch.org](https://ffglitch.org/), extract the files in your `ffglitch-livecoding` directory and renaming the ffglitch folder to `bin/`.
 
-Then run the watchdog script pointing it to the file you just copied:
+Now, run the python script to open the GUI: 
 
 ```bash
 . .env/bin/activate
-python zmqserver_livecoding_watchdog.py your-file.js
+python zmqserver_livecoding_watchdog.py
 ```
 
-I recommend to download the latest release of ffglitch from [ffglitch.org](https://ffglitch.org/), extracting the files in your `ffglitch-livecoding` directory and renaming the ffglitch folder to `bin/`.
+Make a copy of the `template.js` file, drag and drop it into ffglitch-livecoding window (or select it using the button).
 
-In another terminal you can run ffglitch with the scripts provided in the `scripts/` folder (**check the paths for the ffglitch binaries**):
+Choose a video or image file, then open the file you copied from the template, edit and save it to start live coding.
 
-```bash
-./bin/ffgac -i somevideo_file.mp4 -vcodec mpeg4 -mpv_flags +nopimb+forcemv -qscale:v 1 -fcode 5 -g max -sc_threshold max -mb_type_script scripts/mb_type_func_live_simple.js -f rawvideo pipe: | ./bin/fflive -i pipe: -s scripts/livecoding.js
-```
+RTMP mode
+=========
 
-Now open the file you copied from the template, edit and save it to start live coding.
+When running in RTMP server mode, ffglitch-livecoding will run ffglitch listening in port 5550 for RTMP connections. This allows you to stream directly from OBS or any other software
+that supports RTMP, and then glitch that stream. 
 
-For running with an image or a video directly from YouTube (using yt-dlp) check the `test_runners/` folder.
+Notice that when you enable RTMP mode, nothing will show up until you start streaming.
 
+For OBS, go to the settings->streaming and set the server to `rtmp://127.0.0.1:5550` and start streaming, you should see the ffglitch stream right after.
 
 Sending OSC messages
 ====================
 
 The watchdog script is listening to OpenSoundControl messages in port `5558`.
 
-There are two supported messages:
+Supported messages:
 
+- `/loop, "<path.mp4>"`: loads a new file and loops it (video or image)
+- `/rtmp`: runs in RTMP mode (see section above) 
+- `/watch, "<path.js>"`: starts watching a new JavaSript file, useful if you want to switch between effects quickly.
 - `/clean`: this will clean the frame (and continue to apply the current script)
 - `/set, "varname", 10.0`: you can set any variable using the `/set` command. Those are accessible in the livecoding script via the `osc` object. Check the `template.js` for an example.
 
@@ -56,6 +70,7 @@ A example in SuperCollider:
 ```supercollider
 n = NetAddr("127.0.0.1", 5558);
 
+n.sendMsg("/loop", "/tmp/myvideo.mp4");
 n.sendMsg("/set", "someValue", 10.0.rand2);
 n.sendMsg("/set", "anotherValue", 10.0.rand2);
 n.sendMsg("/clean")
