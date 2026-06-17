@@ -9,15 +9,18 @@ class Command {
   }
 
   run(mb_types, nb_frames) {
-    if (!nb_frames)
+    if (nb_frames==0)
       return;
 
     const mb_height = mb_types.length;
     const mb_width = mb_types[0].length;
 
     for (let mb_y = 0; mb_y < mb_height; mb_y++)
-      for (let mb_x = 0; mb_x < mb_width; mb_x++)
-        mb_types[mb_y][mb_x] = CANDIDATE_MB_TYPE_INTRA;
+      for (let mb_x = 0; mb_x < mb_width; mb_x++){
+	      if(Math.random() < nb_frames) {
+	        mb_types[mb_y][mb_x] = CANDIDATE_MB_TYPE_INTRA;
+	      }
+      }
   }
 }
 
